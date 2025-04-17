@@ -11,12 +11,15 @@ from dotenv import load_dotenv
 load_dotenv()
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
+STOCK_SYMBOLS = os.environ.get("STOCK_SYMBOLS", "AAPL").split(
+    ","
+)  # Example: Apple stock
 
+print(STOCK_SYMBOLS)
 # Initialize Telegram bot
 bot = Bot(token=BOT_TOKEN)
 
 # Stock symbol and threshold for the price drop
-STOCK_SYMBOLS = ["SWRD.L", "EIMI.L"]  # Example: Apple stock
 THRESHOLD_DROP = 5.0  # 5% drop
 MA_WINDOW = 200  # 200-day moving average
 SLEEP_TIME = 60  # seconds
