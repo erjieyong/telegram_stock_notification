@@ -16,6 +16,11 @@ CHAT_ID = os.environ.get("CHAT_ID")
 STOCK_SYMBOLS = os.environ.get("STOCK_SYMBOLS", "AAPL").split(
     ","
 )  # Example: Apple stock
+SUMMARY_SENT_HOUR = int(os.environ.get("SUMMARY_SENT_HOUR", 16))
+SUMMARY_SENT_MINUTE = int(
+    os.environ.get("SUMMARY_SENT_MINUTE", 30)
+)  # Default to 16:30 (4:30 PM)
+
 
 print(f"Stocks to monitor: {STOCK_SYMBOLS}")
 # Initialize Telegram bot
@@ -109,7 +114,7 @@ async def monitor_stock():
                 print(f"[ERROR] Failed to check {stock}: {e}")
 
         # Send daily summary at 16:30 (or anytime after that, once per day)
-        summary_target_time = dtime(hour=21, minute=30)
+        summary_target_time = dtime(hour=SUMMARY_SENT_HOUR, minute=SUMMARY_SENT_MINUTE)
         if now.time() >= summary_target_time and (
             last_summary_sent_date is None or last_summary_sent_date.date() < now.date()
         ):
