@@ -1,6 +1,8 @@
 import asyncio
 import time
 import os
+from datetime import datetime, time as dtime
+
 
 import yfinance as yf
 from telegram import Bot
@@ -15,9 +17,11 @@ STOCK_SYMBOLS = os.environ.get("STOCK_SYMBOLS", "AAPL").split(
     ","
 )  # Example: Apple stock
 
-print(STOCK_SYMBOLS)
+print(f"Stocks to monitor: {STOCK_SYMBOLS}")
 # Initialize Telegram bot
 bot = Bot(token=BOT_TOKEN)
+last_summary_sent_date = None  # Track last summary date
+
 
 # Stock symbol and threshold for the price drop
 THRESHOLD_DROP = 5.0  # 5% drop
@@ -50,34 +54,70 @@ async def send_notification(message):
     await bot.send_message(chat_id=CHAT_ID, text=message)
 
 
-# Monitoring function
-async def monitor_stock():
-    print("Start monitoring stocks...")
-    while True:
-        for stock in STOCK_SYMBOLS:
+async def send_daily_summary():
+    summary_lines = ["📊 Daily Stock Summary:"]
+    for stock in STOCK_SYMBOLS:
+        try:
             current_price, previous_close, ma200 = get_stock_price(stock)
-
-            # calculate percentage drop
             drop_percentage = ((previous_close - current_price) / previous_close) * 100
 
-            print(
-                f"[INFO] EpochTime: {time.time():.2f} Current {stock} price: {current_price:.2f}, Previous close: {previous_close:.2f}, 200MA: {ma200:.2f}, Previous Close vs Current Price: {drop_percentage:.2f}%"
+            line = (
+                f"{stock}:\n"
+                f"  - Current: USD${current_price:.2f}\n"
+                f"  - Prev Close: USD${previous_close:.2f}\n"
+                f"  - 200MA: USD${ma200:.2f}\n"
+                f"  - Drop: {drop_percentage:.2f}%\n"
             )
+            summary_lines.append(line)
+        except Exception as e:
+            summary_lines.append(f"{stock}: Error fetching data – {e}")
 
-            if current_price < ma200 and drop_percentage >= THRESHOLD_DROP:
-                message = (
-                    f"⚠️ {stock} dropped below its 200-day MA and is more {THRESHOLD_DROP}% drop from previous day close!\n"
-                    f"Current Price: USD${current_price:.2f}\n"
-                    f"Previous Close: USD${previous_close:.2f}\n"
-                    f"200-day MA: USD${ma200:.2f}"
-                    f"Drop Percentage: {drop_percentage:.2f}%"
-                )
-                await send_notification(message)
-            else:
+    await send_notification("\n".join(summary_lines))
+
+
+# Monitoring function
+async def monitor_stock():
+    global last_summary_sent_date
+    print("Start monitoring stocks...")
+
+    while True:
+        now = datetime.now()
+
+        for stock in STOCK_SYMBOLS:
+            try:
+                current_price, previous_close, ma200 = get_stock_price(stock)
+                drop_percentage = (
+                    (previous_close - current_price) / previous_close
+                ) * 100
+
                 print(
-                    f"[INFO] EpochTime: {time.time():.2f} {stock} is above 200-day MA or drop percentage is below threshold. No alert sent."
+                    f"[INFO] {now.isoformat()} {stock}: Current ${current_price:.2f}, Prev ${previous_close:.2f}, 200MA ${ma200:.2f}, Drop {drop_percentage:.2f}%"
                 )
-        time.sleep(SLEEP_TIME)  # Wait 60 seconds before checking again
+
+                if current_price < ma200 and drop_percentage >= THRESHOLD_DROP:
+                    message = (
+                        f"⚠️ {stock} dropped below its 200-day MA and more than {THRESHOLD_DROP}% from previous close!\n"
+                        f"Current: USD${current_price:.2f}\n"
+                        f"Prev Close: USD${previous_close:.2f}\n"
+                        f"200-day MA: USD${ma200:.2f}\n"
+                        f"Drop: {drop_percentage:.2f}%"
+                    )
+                    await send_notification(message)
+                else:
+                    print(f"[INFO] {stock} OK – No alert condition met.")
+            except Exception as e:
+                print(f"[ERROR] Failed to check {stock}: {e}")
+
+        # Send daily summary at 16:30 (or anytime after that, once per day)
+        summary_target_time = dtime(hour=21, minute=30)
+        if now.time() >= summary_target_time and (
+            last_summary_sent_date is None or last_summary_sent_date.date() < now.date()
+        ):
+            print("[INFO] Sending daily summary...")
+            await send_daily_summary()
+            last_summary_sent_date = now
+
+        time.sleep(SLEEP_TIME)
 
 
 if __name__ == "__main__":
